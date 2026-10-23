@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>幸運拉霸 Lucky Slots</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { min-height:100%; }
+  body {
+    min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(ellipse at top, #2b1055 0%, #160833 55%, #070212 100%);
+    font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC","Segoe UI",sans-serif;
+    padding:28px 16px; overflow-x:hidden;
+  }
+  .stage { position:relative; }
+  .stage > .machine { position:absolute; top:0; left:0; transform-origin:top left; }
+  .machine {
+    position:relative; width:440px; max-width:94vw;
+    background:linear-gradient(180deg,#a31621 0%,#7a0f18 45%,#56090f 100%);
+    border:3px solid #f5c542; border-radius:28px;
+    box-shadow:0 0 0 6px #3d060c, 0 24px 60px rgba(0,0,0,.65), inset 0 2px 14px rgba(255,255,255,.16);
+    padding:16px 22px 20px;
+  }
+  .machine.shake { animation:shake .55s ease; }
+  @keyframes shake {
+    0%,100%{transform:translate(0,0) rotate(0)}
+    20%{transform:translate(-6px,2px) rotate(-1deg)}
+    40%{transform:translate(6px,-2px) rotate(1deg)}
+    60%{transform:translate(-4px,-2px) rotate(-.6deg)}
+    80%{transform:translate(4px,2px) rotate(.6deg)}
+  }
+  .top-deco { text-align:center; }
+  .bulbs { display:flex; justify-content:space-between; padding:0 10px; }
+  .bulb { width:10px; height:10px; border-radius:50%; background:#ffd700;
+    box-shadow:0 0 9px #ffd700, 0 0 3px #fff; animation:blink 1.2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .title {
+    font-size:36px; font-weight:900; letter-spacing:4px; margin-top:8px;
+    background:linear-gradient(180deg,#fff7d6 0%,#ffd700 45%,#b8860b 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
+    animation:titlePulse 2.4s ease-in-out infinite;
+  }
+  @keyframes titlePulse { 0%,100%{filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))} 50%{filter:drop-shadow(0 0 14px rgba(255,215,0,.85))} }
+  .subtitle { font-size:11px; letter-spacing:8px; color:#e8c766; margin-top:2px; }
+  .marquee { margin-top:12px; }
+  .led {
+    background:#1a0507; border:1px solid rgba(245,197,66,.45); border-radius:10px;
+    color:#ffb700; font-weight:700; font-size:14px; letter-spacing:1px;
+    text-align:center; padding:8px 10px; min-height:34px;
+    text-shadow:0 0 8px rgba(255,183,0,.8); box-shadow:inset 0 2px 8px rgba(0,0,0,.8);
+  }
+  .reels-frame {
+    margin-top:12px; background:#14040a; border:3px solid #f5c542; border-radius:16px;
+    padding:10px; box-shadow:inset 0 4px 18px rgba(0,0,0,.9);
+  }
+  .reels { position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .reel {
+    height:240px; overflow:hidden; background:linear-gradient(180deg,#fffdf4,#ffeec9);
+    border-radius:10px; position:relative; box-shadow:inset 0 4px 10px rgba(0,0,0,.25);
+  }
+  .strip { display:flex; flex-direction:column; will-change:transform; }
+  .cell {
+    height:80px; display:flex; align-items:center; justify-content:center;
+    font-size:46px; border-bottom:1px dashed rgba(0,0,0,.08); user-select:none;
+  }
+  .cell.win { animation:winPulse .45s ease-in-out infinite alternate; }
+  @keyframes winPulse {
+    from { background:transparent; transform:scale(1); }
+    to   { background:rgba(255,215,0,.45); transform:scale(1.12); }
+  }
+  .glass {
+    position:absolute; inset:0; border-radius:10px; pointer-events:none;
+    background:linear-gradient(105deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.05) 35%, rgba(255,255,255,0) 60%);
+  }
+  .payline {
+    position:absolute; left:0; right:0; top:calc(50% - 1px); height:2px;
+    background:linear-gradient(90deg, transparent, #ffd700 15%, #ffd700 85%, transparent);
+    opacity:.85; pointer-events:none;
+  }
+  .payline::before, .payline::after {
+    content:"\25C0"; position:absolute; top:-9px; color:#ffd700; font-size:14px;
+    text-shadow:0 0 6px #ffd700;
+  }
+  .payline::before { left:-2px; }
+  .payline::after { right:-2px; content:"\25B6"; }
+  .rowband {
+    position:absolute; left:0; right:0; top:80px; height:80px; opacity:0; pointer-events:none;
+    border-top:2px dashed #ffd700; border-bottom:2px dashed #ffd700;
+    background:rgba(255,215,0,.14); transition:opacity .2s;
+  }
+  .rowband.active { opacity:1; }
+  .scoreboard {
+    margin-top:14px; display:flex; justify-content:space-between; gap:8px;
+    background:#2b0509; border:1px solid rgba(245,197,66,.4); border-radius:12px;
+    padding:10px 16px;
+  }
+  .stat { display:flex; flex-direction:column; align-items:center; flex:1; }
+  .stat .label { font-size:11px; color:#e8c766; letter-spacing:2px; }
+  .stat .value { font-size:24px; font-weight:800; color:#fff; font-variant-numeric:tabular-nums;
+    text-shadow:0 0 10px rgba(255,255,255,.35); }
+  .stat .value.win { color:#7CFC00; text-shadow:0 0 12px rgba(124,252,0,.8); }
+  .controls { display:flex; align-items:center; justify-content:space-between; margin-top:16px; }
+  .btn {
+    background:transparent; border:2px solid #f5c542; color:#ffd700;
+    border-radius:999px; padding:10px 16px; font-weight:700; font-size:14px;
+    cursor:pointer; transition:all .15s;
+  }
+  .btn:hover { background:rgba(245,197,66,.15); }
+  .btn.active { background:linear-gradient(180deg,#ffe27a,#f5a623); color:#5c0a12; border-color:#ffe27a; }
+  .btn.tiny { font-size:12px; padding:6px 12px; opacity:.9; }
+  .spin-btn {
+    width:112px; height:112px; border-radius:50%; cursor:pointer;
+    background:radial-gradient(circle at 32% 30%, #ffe9a8, #f5a623 60%, #c77800);
+    color:#5c0a12; font-size:23px; font-weight:900; letter-spacing:1px;
+    border:4px solid #fff3c4; box-shadow:0 8px 0 #8a5a00, 0 0 26px rgba(255,200,60,.55);
+    transition:transform .08s, box-shadow .08s;
+  }
+  .spin-btn:active { transform:translateY(5px); box-shadow:0 3px 0 #8a5a00, 0 0 26px rgba(255,200,60,.55); }
+  .spin-btn:disabled { filter:grayscale(.7) brightness(.75); cursor:not-allowed; }
+  .footer-row { display:flex; justify-content:center; margin-top:14px; }
+  .lever {
+    position:absolute; right:-56px; top:210px; width:36px; height:150px;
+    transform-origin:bottom center; transition:transform .35s ease; z-index:5;
+  }
+  .lever-stick { width:12px; height:118px; margin:0 auto;
+    background:linear-gradient(90deg,#8a5a00,#f5c542 45%,#8a5a00); border-radius:6px;
+    box-shadow:0 0 8px rgba(0,0,0,.5); }
+  .lever-ball { width:34px; height:34px; border-radius:50%; margin:-4px auto 0;
+    background:radial-gradient(circle at 32% 30%, #ff9d9d, #d20f2f 70%);
+    box-shadow:0 0 14px rgba(255,60,60,.75); }
+  .lever.pulled { transform:rotate(26deg); }
+  .banner {
+    position:absolute; left:50%; top:36%; transform:translate(-50%,-50%) scale(.4);
+    background:linear-gradient(90deg,#ffd700,#ffecb3,#ffd700); color:#7a0f18;
+    font-weight:900; font-size:24px; padding:12px 26px; border-radius:14px;
+    opacity:0; pointer-events:none; transition:all .22s cubic-bezier(.2,1.4,.4,1);
+    z-index:30; box-shadow:0 10px 44px rgba(255,215,0,.65); white-space:nowrap;
+  }
+  .banner.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  .modal-back {
+    position:fixed; inset:0; background:rgba(0,0,0,.72); display:none;
+    align-items:center; justify-content:center; z-index:200; padding:16px;
+  }
+  .modal-back.open { display:flex; }
+  .modal {
+    background:linear-gradient(180deg,#fffdf4,#ffefd0); color:#3d060c;
+    border:3px solid #b8860b; border-radius:18px; padding:22px 24px;
+    width:min(430px,94vw); max-height:86vh; overflow:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.6);
+  }
+  .modal h2 { text-align:center; color:#a31621; margin-bottom:4px; }
+  .modal .rules { font-size:12.5px; line-height:1.7; color:#5c3a00; margin:10px 0 14px; }
+  .modal table { width:100%; border-collapse:collapse; font-size:15px; }
+  .modal th, .modal td { padding:7px 8px; text-align:center; border-bottom:1px solid rgba(184,134,11,.3); }
+  .modal th { color:#a31621; font-size:13px; letter-spacing:1px; }
+  .modal td:first-child { font-size:26px; width:56px; }
+  .modal .pay { font-weight:800; color:#7a0f18; }
+  .modal .close-row { text-align:center; margin-top:16px; }
+  .modal .close-row .btn { border-color:#a31621; color:#a31621; font-weight:800; }
+  .modal .close-row .btn:hover { background:rgba(163,22,33,.12); }
+  #confetti { position:fixed; inset:0; pointer-events:none; z-index:150; }
+  .hint { text-align:center; color:#e8c766; font-size:11px; margin-top:10px; opacity:.8; letter-spacing:1px; }
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<div class="stage">
+  <div class="machine" id="machine">
+    <div class="top-deco">
+      <div class="bulbs" id="bulbsTop"></div>
+      <h1 class="title">幸運拉霸</h1>
+      <div class="subtitle">LUCKY SLOTS</div>
+    </div>
+    <div class="marquee"><div class="led" id="message">按下 SPIN 開始遊戲！</div></div>
+    <div class="reels-frame">
+      <div class="reels" id="reels">
+        <div class="reel"><div class="strip"></div></div>
+        <div class="reel"><div class="strip"></div></div>
+        <div class="reel"><div class="strip"></div></div>
+        <div class="rowband" id="rowbandMid"></div>
+        <div class="glass"></div>
+        <div class="payline"></div>
+      </div>
+    </div>
+    <div class="scoreboard">
+      <div class="stat"><span class="label">中獎次數</span><span class="value" id="winCount">0</span></div>
+      <div class="stat"><span class="label">上次獎項</span><span class="value win" id="lastWin">—</span></div>
+    </div>
+    <div class="controls">
+      <button class="btn" id="autoBtn">自動轉</button>
+      <button class="spin-btn" id="spinBtn">SPIN</button>
+      <button class="btn" id="paytableBtn">賠率表</button>
+    </div>
+    <div class="footer-row">
+      <button class="btn tiny" id="muteBtn">🔊 音效開</button>
+    </div>
+    <div class="lever" id="lever"><div class="lever-stick"></div><div class="lever-ball"></div></div>
+    <div class="banner" id="banner"></div>
+    <div class="bulbs" id="bulbsBottom"></div>
+  </div>
+  <div class="hint">空白鍵 = 轉動 · 自動轉 = 連續轉動</div>
+</div>
+
+<div class="modal-back" id="modalBack">
+  <div class="modal">
+    <h2>賠率表</h2>
+    <div class="rules">
+      對齊<b>中間中獎線</b>（金色中線）即可中獎：<br>
+      • <b>頭獎</b>：7️⃣ 7️⃣ 7️⃣（機率 5%）<br>
+      • <b>二獎</b>：💎 💎 💎（機率 10%）<br>
+      • <b>三獎</b>：任意三個相同水果（機率 20%）<br>
+      • <b>四獎</b>：三個同顏色水果（機率 30%）<br>
+      未中獎機率 35%。<br>
+      同色系：紅＝🍎🍒🍉、黃＝🍌🍋、綠＝🥝、紫＝🍇。<br>
+      （🥝、🍇 同色系僅一種，三連屬三獎）
+    </div>
+    <table>
+      <tr><th>獎項</th><th>中獎組合</th><th>機率</th></tr>
+      <tr><td class="pay">頭獎</td><td>7️⃣ 7️⃣ 7️⃣</td><td class="pay">5%</td></tr>
+      <tr><td class="pay">二獎</td><td>💎 💎 💎</td><td class="pay">10%</td></tr>
+      <tr><td class="pay">三獎</td><td>🍎🍎🍎 等全同水果</td><td class="pay">20%</td></tr>
+      <tr><td class="pay">四獎</td><td>🍎🍒🍉 等同色水果</td><td class="pay">30%</td></tr>
+    </table>
+    <div class="rules" style="text-align:center; margin-top:12px;">祝你好運！🍀</div>
+    <div class="close-row"><button class="btn" id="modalClose">關閉</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ===== 安全儲存：預覽 iframe / 無痕模式中 localStorage 可能不可用，改用記憶體後備 ===== */
+var memStore = {};
+function storeGet(key) {
+  try { var v = localStorage.getItem(key); if (v !== null) return v; } catch (e) {}
+  return memStore.hasOwnProperty(key) ? memStore[key] : null;
+}
+function storeSet(key, val) {
+  try { localStorage.setItem(key, val); } catch (e) { memStore[key] = val; }
+}
+/* ===== 常數與狀態 ===== */
+var CELL_H = 80;
+var VISIBLE = 3;
+var STRIP_LEN = 30;
+var SYM = {
+  apple:      { icon: "\u{1F34E}", w: 17, color: "red" },
+  banana:     { icon: "\u{1F34C}", w: 15, color: "yellow" },
+  kiwi:       { icon: "\u{1F95D}", w: 13, color: "green" },
+  cherry:     { icon: "\u{1F352}", w: 15, color: "red" },
+  lemon:      { icon: "\u{1F34B}", w: 13, color: "yellow" },
+  watermelon: { icon: "\u{1F349}", w: 12, color: "red" },
+  grape:      { icon: "\u{1F347}", w: 10, color: "purple" },
+  seven:      { icon: "7️⃣", w: 2,  color: "special" },
+  diamond:    { icon: "\u{1F48E}", w: 3,  color: "special" }
+};
+var FRUITS = ["apple", "banana", "kiwi", "cherry", "lemon", "watermelon", "grape"];
+var COLOR_GROUPS = {
+  red:    ["apple", "cherry", "watermelon"],
+  yellow: ["banana", "lemon"],
+  green:  ["kiwi"],
+  purple: ["grape"]
+};
+var TOTAL_W = 0;
+for (var k in SYM) TOTAL_W += SYM[k].w;
+
+var muted = storeGet("slot_muted") === "1";
+var winCount = parseInt(storeGet("slot_wins"), 10);
+if (!isFinite(winCount) || winCount < 0) winCount = 0;
+var spinning = false;
+var autoOn = false;
+
+/* ===== DOM ===== */
+var machine = document.getElementById("machine");
+var messageEl = document.getElementById("message");
+var winCountEl = document.getElementById("winCount");
+var lastWinEl = document.getElementById("lastWin");
+var spinBtn = document.getElementById("spinBtn");
+var autoBtn = document.getElementById("autoBtn");
+var paytableBtn = document.getElementById("paytableBtn");
+var muteBtn = document.getElementById("muteBtn");
+var lever = document.getElementById("lever");
+var banner = document.getElementById("banner");
+var modalBack = document.getElementById("modalBack");
+var modalClose = document.getElementById("modalClose");
+var reelEls = Array.prototype.slice.call(document.querySelectorAll(".reel"));
+var midBand = document.getElementById("rowbandMid");
+reelEls.forEach(function (r) { r.strip = r.querySelector(".strip"); });
+
+/* ===== 全域錯誤顯示到 LED（出錯時可見，不會無聲失敗） ===== */
+window.addEventListener("error", function (e) {
+  try { setMessage("發生錯誤：" + (e.message || "未知錯誤")); } catch (err) {}
+});
+
+/* ===== 工具 ===== */
+function save() {
+  storeSet("slot_muted", muted ? "1" : "0");
+  storeSet("slot_wins", winCount);
+}
+function sleep(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+function pickSymbol() {
+  var r = Math.random() * TOTAL_W;
+  for (var key in SYM) { r -= SYM[key].w; if (r <= 0) return key; }
+  return "cherry";
+}
+function makeCell(key) {
+  var c = document.createElement("div");
+  c.className = "cell";
+  c.textContent = SYM[key].icon;
+  c.dataset.sym = key;
+  return c;
+}
+function setMessage(t) { messageEl.textContent = t; }
+
+/* ===== 音效（Web Audio 合成，無外部檔案） ===== */
+var audioCtx = null;
+function ac() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+function tone(freq, dur, type, vol, delay) {
+  if (muted) return;
+  try {
+    var ctx = ac(), o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || "square"; o.frequency.value = freq;
+    var t0 = ctx.currentTime + (delay || 0);
+    g.gain.setValueAtTime(vol || 0.14, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  } catch (e) { /* 忽略音效錯誤 */ }
+}
+function sndTick() { tone(950 + Math.random() * 200, 0.06, "square", 0.1); }
+function sndSpin() { tone(520, 0.08, "square", 0.07); tone(780, 0.08, "square", 0.07, 0.08); }
+function sndWin() {
+  var n = [523.25, 659.25, 783.99, 1046.5];
+  n.forEach(function (f, i) { tone(f, 0.16, "triangle", 0.18, i * 0.09); });
+}
+function sndJackpot() {
+  var n = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5, 1318.5, 1567.98];
+  n.forEach(function (f, i) { tone(f, 0.18, "triangle", 0.2, i * 0.09); });
+  setTimeout(function () {
+    n.forEach(function (f, i) { tone(f, 0.18, "triangle", 0.18, 0.75 + i * 0.09); });
+  }, 950);
+}
+function sndClick() { tone(660, 0.05, "square", 0.06); }
+
+/* ===== 裝飾燈 ===== */
+function fillBulbs(el, n) {
+  for (var i = 0; i < n; i++) {
+    var b = document.createElement("span");
+    b.className = "bulb";
+    b.style.animationDelay = (i * 0.11) + "s";
+    el.appendChild(b);
+  }
+}
+fillBulbs(document.getElementById("bulbsTop"), 12);
+fillBulbs(document.getElementById("bulbsBottom"), 12);
+
+/* ===== 初始轉輪 ===== */
+reelEls.forEach(function (reel) {
+  for (var i = 0; i < STRIP_LEN; i++) reel.strip.appendChild(makeCell(pickSymbol()));
+});
+/* ===== 彩金特效 ===== */
+function showBanner(text, ms) {
+  banner.textContent = text;
+  banner.classList.add("show");
+  setTimeout(function () { banner.classList.remove("show"); }, ms || 1600);
+}
+function leverPull() {
+  lever.classList.add("pulled");
+  setTimeout(function () { lever.classList.remove("pulled"); }, 420);
+}
+function machineShake() {
+  machine.classList.remove("shake");
+  void machine.offsetWidth;
+  machine.classList.add("shake");
+}
+
+/* 彩帶 */
+var cvs = document.getElementById("confetti"), cctx = cvs.getContext("2d");
+var parts = [], confettiRunning = false;
+function resizeCanvas() { cvs.width = window.innerWidth; cvs.height = window.innerHeight; }
+window.addEventListener("resize", resizeCanvas); resizeCanvas();
+function confetti(n) {
+  var colors = ["#ffd700", "#ff4757", "#ffffff", "#ffa502", "#2ed573", "#70a1ff"];
+  for (var i = 0; i < (n || 170); i++) {
+    parts.push({
+      x: window.innerWidth / 2 + (Math.random() - 0.5) * 320,
+      y: window.innerHeight / 2 - 120,
+      vx: (Math.random() - 0.5) * 15,
+      vy: -Math.random() * 16 - 5,
+      g: 0.32 + Math.random() * 0.22,
+      s: 5 + Math.random() * 7,
+      c: colors[i % colors.length],
+      r: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.35,
+      life: 1
+    });
+  }
+  if (!confettiRunning) { confettiRunning = true; requestAnimationFrame(confLoop); }
+}
+function confLoop() {
+  cctx.clearRect(0, 0, cvs.width, cvs.height);
+  parts = parts.filter(function (p) { return p.life > 0 && p.y < cvs.height + 40; });
+  parts.forEach(function (p) {
+    p.vy += p.g; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+    p.life -= 0.006;
+    cctx.save();
+    cctx.globalAlpha = Math.max(0, p.life);
+    cctx.translate(p.x, p.y); cctx.rotate(p.r);
+    cctx.fillStyle = p.c;
+    cctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.65);
+    cctx.restore();
+  });
+  if (parts.length > 0) requestAnimationFrame(confLoop);
+  else { confettiRunning = false; cctx.clearRect(0, 0, cvs.width, cvs.height); }
+}
+
+/* ===== 拉霸核心 ===== */
+function clearWins() {
+  reelEls.forEach(function (r) {
+    (r.winCells || []).forEach(function (c) { c.classList.remove("win"); });
+  });
+  midBand.classList.remove("active");
+}
+
+/* ===== 獎項結構：依指定機率決定中間中獎線結果 =====
+   頭獎 7 7 7      → 5%
+   二獎 💎💎💎     → 10%
+   三獎 全同水果    → 20%
+   四獎 同色水果    → 30%
+   未中獎          → 35% */
+function rollPrize() {
+  var r = Math.random() * 100;
+  if (r < 5) return { tier: 1, syms: ["seven", "seven", "seven"] };
+  if (r < 15) return { tier: 2, syms: ["diamond", "diamond", "diamond"] };
+  if (r < 35) { var f = FRUITS[Math.floor(Math.random() * FRUITS.length)]; return { tier: 3, syms: [f, f, f] }; }
+  if (r < 65) return { tier: 4, syms: pickColorCombo() };
+  return { tier: 0, syms: null };
+}
+function pickColorCombo() {
+  var g = Math.random() < 0.6 ? COLOR_GROUPS.red : COLOR_GROUPS.yellow;
+  var combo = [];
+  for (var i = 0; i < 3; i++) combo.push(g[Math.floor(Math.random() * g.length)]);
+  if (combo[0] === combo[1] && combo[1] === combo[2]) {
+    combo[2] = g[(g.indexOf(combo[2]) + 1) % g.length];
+  }
+  return combo;
+}
+function isWinCombo(c) {
+  if (c[0] === c[1] && c[1] === c[2]) return true;
+  var col = SYM[c[0]].color;
+  if (col !== "special" && col === SYM[c[1]].color && col === SYM[c[2]].color) return true;
+  return false;
+}
+function rollNoneCombo() {
+  var combo;
+  do { combo = [pickSymbol(), pickSymbol(), pickSymbol()]; } while (isWinCombo(combo));
+  return combo;
+}
+
+function spin() {
+  if (spinning) return;
+  spinning = true;
+  spinBtn.disabled = true;
+  clearWins();
+  setMessage("旋轉中……祝你好運！");
+  leverPull();
+  sndSpin();
+
+  var prize = rollPrize();
+  var noneCombo = prize.syms ? null : rollNoneCombo();
+  var durs = [1500, 2150, 2800];
+  reelEls.forEach(function (reel, i) {
+    var mid = prize.syms ? prize.syms[i] : noneCombo[i];
+    var results = [pickSymbol(), mid, pickSymbol()];
+    reel.results = results;
+    var strip = reel.strip;
+    strip.style.transition = "none";
+    strip.innerHTML = "";
+    for (var j = 0; j < STRIP_LEN - VISIBLE; j++) strip.appendChild(makeCell(pickSymbol()));
+    var winCells = results.map(function (s) {
+      var c = makeCell(s); strip.appendChild(c); return c;
+    });
+    reel.winCells = winCells;
+    strip.style.transform = "translateY(0px)";
+    void strip.offsetHeight;
+    strip.style.transition = "transform " + durs[i] + "ms cubic-bezier(.1,.72,.15,1)";
+    strip.style.transform = "translateY(" + (-(STRIP_LEN - VISIBLE) * CELL_H) + "px)";
+    setTimeout(sndTick, durs[i]);
+  });
+
+  sleep(durs[2] + 140).then(function () {
+    evaluate();
+    spinning = false;
+    spinBtn.disabled = false;
+    if (autoOn) setTimeout(spin, 900);
+  });
+}
+
+function evaluate() {
+  var mid = reelEls.map(function (r) { return r.results[1]; });
+  var tier = 0;
+  if (mid[0] === mid[1] && mid[1] === mid[2]) {
+    if (mid[0] === "seven") tier = 1;
+    else if (mid[0] === "diamond") tier = 2;
+    else tier = 3;
+  } else {
+    var c0 = SYM[mid[0]].color;
+    if (c0 !== "special" && c0 === SYM[mid[1]].color && c0 === SYM[mid[2]].color) tier = 4;
+  }
+  if (tier > 0) {
+    reelEls.forEach(function (r) { r.winCells[1].classList.add("win"); });
+    midBand.classList.add("active");
+    winCount++;
+    winCountEl.textContent = winCount;
+    save();
+  }
+  if (tier === 1) {
+    lastWinEl.textContent = "頭獎";
+    sndJackpot();
+    machineShake();
+    confetti(200);
+    showBanner("🎰 頭獎！7 7 7", 2600);
+    setMessage("頭獎！7 7 7 全線歸你！");
+  } else if (tier === 2) {
+    lastWinEl.textContent = "二獎";
+    sndWin();
+    showBanner("💎 二獎！💎 💎 💎", 1800);
+    setMessage("二獎！三顆鑽石！");
+  } else if (tier === 3) {
+    var ic = SYM[mid[0]].icon;
+    lastWinEl.textContent = "三獎";
+    sndWin();
+    showBanner("🎊 三獎！" + ic + ic + ic, 1800);
+    setMessage("三獎！全同水果 " + ic + ic + ic + "！");
+  } else if (tier === 4) {
+    var mix = SYM[mid[0]].icon + SYM[mid[1]].icon + SYM[mid[2]].icon;
+    lastWinEl.textContent = "四獎";
+    sndWin();
+    showBanner("🍀 四獎！同色水果 " + mix, 1800);
+    setMessage("四獎！同顏色水果 " + mix + "！");
+  } else {
+    lastWinEl.textContent = "—";
+    setMessage("未中獎，再試一次！");
+  }
+}
+/* ===== 自適應縮放：任何視窗高度都完整可見、可按到 SPIN ===== */
+var stage = document.querySelector(".stage");
+function fitMachine() {
+  var w = machine.offsetWidth, h = machine.offsetHeight;
+  var s = Math.min(1, (window.innerHeight - 20) / h, (window.innerWidth - 8) / (w + 70));
+  if (!isFinite(s) || s <= 0) s = 1;
+  stage.style.width = Math.round(w * s) + "px";
+  stage.style.height = Math.round(h * s) + "px";
+  machine.style.transform = "scale(" + s + ")";
+}
+window.addEventListener("resize", fitMachine);
+window.addEventListener("load", fitMachine);
+setTimeout(fitMachine, 300);
+
+/* ===== UI 綁定 ===== */
+function refreshMuteUI() {
+  muteBtn.textContent = muted ? "🔇 音效關" : "🔊 音效開";
+}
+
+spinBtn.addEventListener("click", function () { if (!spinning) { sndClick(); spin(); } });
+
+autoBtn.addEventListener("click", function () {
+  autoOn = !autoOn;
+  autoBtn.classList.toggle("active", autoOn);
+  sndClick();
+  if (autoOn) {
+    setMessage("自動轉已開啟");
+    if (!spinning) spin();
+  } else {
+    setMessage("自動轉已關閉");
+  }
+});
+
+paytableBtn.addEventListener("click", function () {
+  sndClick();
+  modalBack.classList.add("open");
+});
+modalClose.addEventListener("click", function () { sndClick(); modalBack.classList.remove("open"); });
+modalBack.addEventListener("click", function (e) { if (e.target === modalBack) modalBack.classList.remove("open"); });
+
+muteBtn.addEventListener("click", function () {
+  muted = !muted;
+  refreshMuteUI();
+  save();
+  if (!muted) sndClick();
+});
+
+document.addEventListener("keydown", function (e) {
+  if (e.code === "Space" && !spinning && !modalBack.classList.contains("open")) {
+    e.preventDefault();
+    spin();
+  }
+});
+
+/* ===== 啟動 ===== */
+try {
+  refreshMuteUI();
+  winCountEl.textContent = winCount;
+} catch (err) {
+  setMessage("初始化失敗：" + err.message);
+}
+try { fitMachine(); } catch (e) {}
+</script>
+</body>
+</html>
